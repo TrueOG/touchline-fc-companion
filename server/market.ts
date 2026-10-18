@@ -3,7 +3,7 @@ import type { Page } from 'playwright';
 import type { ListingObservation, Target } from '../shared/model.js';
 import { AppError, evaluateListing } from './domain.js';
 import { cardStyleKey } from './card-style.js';
-import { writeActionAudit, type ActionAudit } from './action-audit.js';
+import { writeActionAudit, writeActionAuditBatch, type ActionEvent, type ActionAudit } from './action-audit.js';
 import type { SearchOptions } from './browser.js';
 
 const EA_URL = 'https://www.ea.com/ea-sports-fc/ultimate-team/web-app/';
@@ -187,6 +187,15 @@ function observeRow(row: Awaited<ReturnType<typeof listings>>[number]): ListingO
 
 export async function buyVerifiedListing(page: Page, target: Target, maxPrice: number, observation: ListingObservation,
   beforeSubmit: () => Promise<void>, audit: ActionAudit = writeActionAudit, control?: AttemptControl): Promise<PurchaseResult> {
+  // The durable purchase intent remains before Buy Now. Detailed receipts are
+  // flushed together after the critical interaction, including on cancellation.
+  const events: ActionEvent[]=[];
+  try { return await buyListing(page,target,maxPrice,observation,beforeSubmit,
+    audit===writeActionAudit ? async event=>{events.push(event);} : audit,control); }
+  finally { if(audit===writeActionAudit)await writeActionAuditBatch(events); }
+}
+async function buyListing(page: Page, target: Target, maxPrice: number, observation: ListingObservation,
+  beforeSubmit: () => Promise<void>, audit: ActionAudit = writeActionAudit, control?: AttemptControl): Promise<PurchaseResult> {
   await guard(page);
   const selected = (await listings(page)).filter(row => row.selected);
   const row = selected[0];
@@ -196,13 +205,14 @@ export async function buyVerifiedListing(page: Page, target: Target, maxPrice: n
   if (verdict !== 'eligible') throw new AppError(verdict, 'İlk ilanın görünen kart bilgileri veya fiyatı uygun değil; satın alma durduruldu.');
   if (current.price !== observation.price) throw new AppError('price_changed', 'Son kontrolde fiyat değişti.');
   const buy = page.getByRole('button', { name: new RegExp(`^Buy Now for ${escape(new Intl.NumberFormat('en-US').format(current.price))}$`) });
-  if (await buy.count() !== 1 || !await buy.isEnabled()) throw new AppError('listing_gone', 'Buy Now kullanılamıyor.');
-  const classes = (await buy.getAttribute('class') ?? '').split(/\s+/);
+  const buttons=await buy.evaluateAll(elements=>elements.map(el=>({enabled:!el.matches(':disabled, [aria-disabled="true"]'),classes:el.className,text:(el as HTMLElement).innerText})));
+  if (buttons.length !== 1 || !buttons[0]!.enabled) throw new AppError('listing_gone', 'Buy Now kullanılamıyor.');
+  const classes = buttons[0]!.classes.split(/\s+/);
   if (!classes.includes('buyButton') || !classes.includes('currency-coins') || classes.includes('bidButton')) throw new AppError('ui_changed', 'Düğme Buy Now olarak doğrulanamadı; tıklanmadı.');
   const receipt = (action: Parameters<ActionAudit>[0]['action'], button: string) => audit({
     at:new Date().toISOString(),targetId:target.id,observationAt:current.observedAt,price:current.price,maxPrice,action,button,
   });
-  const buyText = await buy.innerText();
+  const buyText = buttons[0]!.text;
   if (Date.now() - Date.parse(current.observedAt) > 5000) throw new AppError('unknown', 'Son doğrulama eskidi; satın alma başlatılmadı.');
   control?.assertActive();
   const successText = /^Congratulations, you've won this item for\s*([\d,]+)(?: (?:FUT )?Coins)?[.!]?$/;
@@ -218,14 +228,19 @@ export async function buyVerifiedListing(page: Page, target: Target, maxPrice: n
   await receipt('buy_now_clicked',buyText);
   const dialog = page.locator('.ea-dialog-view:visible');
   await dialog.waitFor({ state: 'visible', timeout: 4000 });
-  if (await dialog.count() !== 1 || await dialog.locator('.ea-dialog-view--title').innerText() !== 'Get Now') throw new AppError('unknown', 'Beklenmeyen satın alma yanıtı.');
-  const message = await dialog.locator('.ea-dialog-view--msg').innerText();
+  const [dialogs, latest, frames, cancelVisible]=await Promise.all([
+    dialog.evaluateAll(elements=>elements.map(el=>({title:(el.querySelector('.ea-dialog-view--title') as HTMLElement)?.innerText,message:(el.querySelector('.ea-dialog-view--msg') as HTMLElement)?.innerText}))),
+    listings(page).then(items=>items.filter(item=>item.selected)),
+    page.locator('iframe:visible').count(),
+    dialog.getByRole('button',{name:'Cancel',exact:true}).isVisible(),
+  ]);
+  if (dialogs.length !== 1 || dialogs[0]?.title !== 'Get Now') throw new AppError('unknown', 'Beklenmeyen satın alma yanıtı.');
+  const message = dialogs[0]?.message ?? '';
   const amount = /^Are you sure you want to get this item for ([\d,]+) FUT Coins\?$/.exec(message)?.[1];
   if (!amount || coinValue(amount) !== current.price || coinValue(amount) > maxPrice) throw new AppError('unknown', 'Onay fiyatı eşleşmiyor; onay verilmedi.');
-  const latest = (await listings(page)).filter(item => item.selected);
   const last = latest[0];
   if (latest.length !== 1 || !last || last.index !== row.index || last.name !== row.name || last.rating !== row.rating || cardStyleKey(last.style) !== cardStyleKey(row.style) || last.price !== row.price || !activeTime.test(last.time)) throw new AppError('unknown', 'Onay sırasında ilan değişti; onay verilmedi.');
-  if (await page.locator('iframe:visible').count() || !await dialog.getByRole('button', { name: 'Cancel', exact: true }).isVisible()) throw new AppError('unknown', 'Onay ekranı doğrulanamadı.');
+  if (frames || !cancelVisible) throw new AppError('unknown', 'Onay ekranı doğrulanamadı.');
   if (Date.now() - Date.parse(current.observedAt) > 5000) throw new AppError('unknown', 'Onay beklerken doğrulama eskidi; onay verilmedi.');
   await receipt('confirm_requested', 'Get Now → Ok');
   try { control?.assertActive(); } catch (error) {

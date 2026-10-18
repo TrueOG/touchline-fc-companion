@@ -8,7 +8,9 @@ export interface ActionEvent {
 }
 export type ActionAudit = (event: ActionEvent) => Promise<void>;
 /** Local UI click receipts only; never credentials, account balances or network payloads. */
-export const writeActionAudit: ActionAudit = async event => {
+export const writeActionAudit: ActionAudit = event => writeActionAuditBatch([event]);
+export async function writeActionAuditBatch(events: ActionEvent[]): Promise<void> {
+  if(!events.length)return;
   const path = new URL('../../data/actions.json', import.meta.url);
   // In source development server/ is one level below project root; compiled dist/server/ is two.
   const actual = import.meta.url.endsWith('.ts') ? new URL('../data/actions.json', import.meta.url) : path;
@@ -20,6 +22,6 @@ export const writeActionAudit: ActionAudit = async event => {
   const file = fileURLToPath(actual);
   await mkdir(dirname(file),{recursive:true});
   const temp = file + '.' + randomUUID() + '.tmp';
-  await writeFile(temp,JSON.stringify([...history,event].slice(-800),null,2),{encoding:'utf8',mode:0o600});
+  await writeFile(temp,JSON.stringify([...history,...events].slice(-800),null,2),{encoding:'utf8',mode:0o600});
   await rename(temp,file);
 };

@@ -128,3 +128,7 @@ Gerçek DOM üzerinde çalışan manuel kontrol yardımcısı, yerel Türkçe pa
 **Desteklenmeyenler:** EA otomatik pazar araması, otomatik filtre doldurma, arka planda tarama, tekrar/sayfalama, teklif/satın alma; farklı Web App dilleri; gizli API; kararlı EA ilan kimliği garantisi; gerçek satın alma onayı/başarısı/başarısızlığını otomatik algılama. Bu işlevler yapılmış veya doğrulanmış olarak raporlanmaz.
 
 Kaynaklar: [EA inceleme raporu](EA-INCELEME.md), [Windows ve kullanım talimatları](../README.md).
+
+## Satın alma kritik yol optimizasyonu
+
+Buy Now düğmesinin sayı, etkinlik, sınıf ve metin okumaları tek DOM okumasında toplandı. Onay penceresinin başlık/metni birlikte, bağımsız kart/iframe/Cancel kontrolleri paralel okunur. Normal üretim akışındaki dört tıklama makbuzu işlem sonunda tek atomik yazımla saklanır; satın alma niyeti hâlâ ilk Buy Now öncesinde kalıcı kaydedilir. İşlem sırasında süreç çökerse ayrıntılı makbuzlar eksik kalabilir, ancak belirsiz alım kilidi kalır. Canlı hız kazancı henüz ölçülmedi; DOM ve disk gidiş gelişleri azaltıldı.
