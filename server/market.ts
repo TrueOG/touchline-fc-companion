@@ -15,8 +15,9 @@ const coinValue = (text: string) => /^(?:[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)$/.tes
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 async function guard(page: Page) {
-  if (page.url() !== EA_URL || await page.getByRole('button', { name: 'Login', exact: true }).isVisible()) throw new AppError('session_expired', 'EA girişini kendiniz tamamlayın.');
-  if (await page.locator('iframe:visible, .ea-dialog-view:visible, [role="dialog"]:visible, [aria-modal="true"]:visible').count()) throw new AppError('ui_changed', 'Açık uyarıyı veya güvenlik kontrolünü kendiniz çözün.');
+  const [login, blocked]=await Promise.all([page.getByRole('button', {name:'Login',exact:true}).isVisible(),page.locator('iframe:visible, .ea-dialog-view:visible, [role="dialog"]:visible, [aria-modal="true"]:visible').count()]);
+  if (page.url() !== EA_URL || login) throw new AppError('session_expired', 'EA girişini kendiniz tamamlayın.');
+  if (blocked) throw new AppError('ui_changed', 'Açık uyarıyı veya güvenlik kontrolünü kendiniz çözün.');
 }
 async function backFrom(page: Page, title: string) {
   const bar = page.locator('.ut-navigation-bar-view').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
@@ -158,13 +159,13 @@ export async function searchMarketOnce(page: Page, target: Target, maxPrice: num
     .catch(() => { throw new AppError('ui_changed', 'Search Results açıldı ancak ilan listesi veya boş sonuç mesajı doğrulanamadı.'); });
   options.control?.mark('list');
   options.control?.assertActive();
-  await guard(page);
-  if (await page.getByRole('heading', { name: 'No results found', exact: true }).isVisible()) throw new AppError('no_player', 'Bu aramada uygun ilan bulunamadı.');
+  const [,empty]=await Promise.all([guard(page),page.getByRole('heading', {name:'No results found',exact:true}).isVisible()]);
+  if (empty) throw new AppError('no_player', 'Bu aramada uygun ilan bulunamadı.');
   await waitForListingData(page);
   options.control?.mark('card');
   options.control?.assertActive();
-  await guard(page);
-  const candidate = (await listings(page))[0];
+  const [,rows]=await Promise.all([guard(page),listings(page)]);
+  const candidate = rows[0];
   if (!candidate) throw new AppError('no_player', 'İlan bulunamadı.');
   const observation = observeRow(candidate);
   const verdict = evaluateListing(target, maxPrice, observation);
@@ -196,8 +197,8 @@ export async function buyVerifiedListing(page: Page, target: Target, maxPrice: n
 }
 async function buyListing(page: Page, target: Target, maxPrice: number, observation: ListingObservation,
   beforeSubmit: () => Promise<void>, audit: ActionAudit = writeActionAudit, control?: AttemptControl): Promise<PurchaseResult> {
-  await guard(page);
-  const selected = (await listings(page)).filter(row => row.selected);
+  const [,rows,balanceBefore]=await Promise.all([guard(page),listings(page),readBalance(page)]);
+  const selected = rows.filter(row => row.selected);
   const row = selected[0];
   if (selected.length !== 1 || !row || row.index !== observation.rowIndex) throw new AppError('price_changed', 'Seçili ilan değişti; satın alma başlatılmadı.');
   const current = observeRow(row);
@@ -218,7 +219,7 @@ async function buyListing(page: Page, target: Target, maxPrice: number, observat
   const successText = /^Congratulations, you've won this item for\s*([\d,]+)(?: (?:FUT )?Coins)?[.!]?$/;
   const success = page.getByText(successText).filter({visible:true});
   if (await success.count()) throw new AppError('unknown', 'Önceki alım bildirimi hâlâ açık; yeni alım yapılmadı.');
-  const balanceBefore = await readBalance(page);
+
   // Lock durably before any buy click, even if EA changes to a one-click purchase UI.
   await beforeSubmit();
   await receipt('buy_now_requested',buyText);

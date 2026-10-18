@@ -1,0 +1,129 @@
+{
+  "at": "2026-10-18T21:24:59.562Z",
+  "environment": "Local headless Playwright fixture; no network, service persistence or audit IO. Two warmups, twenty measured samples.",
+  "samples": [
+    {
+      "listToBuyMs": 17.545600000000377,
+      "listToConfirmMs": 50.776700000000346,
+      "buyToConfirmMs": 33.23109999999997
+    },
+    {
+      "listToBuyMs": 17.152500000000146,
+      "listToConfirmMs": 51.56860000000006,
+      "buyToConfirmMs": 34.416099999999915
+    },
+    {
+      "listToBuyMs": 16.016599999999926,
+      "listToConfirmMs": 52.58480000000009,
+      "buyToConfirmMs": 36.56820000000016
+    },
+    {
+      "listToBuyMs": 16.425100000000384,
+      "listToConfirmMs": 52.45290000000023,
+      "buyToConfirmMs": 36.02779999999984
+    },
+    {
+      "listToBuyMs": 15.6858000000002,
+      "listToConfirmMs": 52.944400000000314,
+      "buyToConfirmMs": 37.258600000000115
+    },
+    {
+      "listToBuyMs": 15.916299999999865,
+      "listToConfirmMs": 52.75510000000031,
+      "buyToConfirmMs": 36.83880000000045
+    },
+    {
+      "listToBuyMs": 15.419200000000274,
+      "listToConfirmMs": 51.68040000000019,
+      "buyToConfirmMs": 36.26119999999992
+    },
+    {
+      "listToBuyMs": 18.030399999999645,
+      "listToConfirmMs": 50.13670000000002,
+      "buyToConfirmMs": 32.106300000000374
+    },
+    {
+      "listToBuyMs": 17.872199999999793,
+      "listToConfirmMs": 48.74709999999959,
+      "buyToConfirmMs": 30.874899999999798
+    },
+    {
+      "listToBuyMs": 16.00749999999971,
+      "listToConfirmMs": 51.225000000000364,
+      "buyToConfirmMs": 35.217500000000655
+    },
+    {
+      "listToBuyMs": 17.13550000000032,
+      "listToConfirmMs": 53.30869999999959,
+      "buyToConfirmMs": 36.17319999999927
+    },
+    {
+      "listToBuyMs": 18.43870000000061,
+      "listToConfirmMs": 51.1849000000002,
+      "buyToConfirmMs": 32.74619999999959
+    },
+    {
+      "listToBuyMs": 16.476199999999153,
+      "listToConfirmMs": 52.69080000000031,
+      "buyToConfirmMs": 36.214600000001155
+    },
+    {
+      "listToBuyMs": 16.48910000000069,
+      "listToConfirmMs": 51.208300000000236,
+      "buyToConfirmMs": 34.719199999999546
+    },
+    {
+      "listToBuyMs": 16.13959999999861,
+      "listToConfirmMs": 51.88709999999992,
+      "buyToConfirmMs": 35.74750000000131
+    },
+    {
+      "listToBuyMs": 17.077800000000934,
+      "listToConfirmMs": 51.84410000000025,
+      "buyToConfirmMs": 34.76629999999932
+    },
+    {
+      "listToBuyMs": 16.419200000000274,
+      "listToConfirmMs": 50.1869999999999,
+      "buyToConfirmMs": 33.767799999999625
+    },
+    {
+      "listToBuyMs": 15.729000000001179,
+      "listToConfirmMs": 52.718800000000556,
+      "buyToConfirmMs": 36.98979999999938
+    },
+    {
+      "listToBuyMs": 17.31710000000021,
+      "listToConfirmMs": 51.50330000000031,
+      "buyToConfirmMs": 34.1862000000001
+    },
+    {
+      "listToBuyMs": 18.421800000000076,
+      "listToConfirmMs": 50.03859999999986,
+      "buyToConfirmMs": 31.616799999999785
+    }
+  ],
+  "summary": {
+    "listToBuyMs": {
+      "mean": 16.785760000000117,
+      "median": 16.48264999999992,
+      "p95": 18.421800000000076,
+      "min": 15.419200000000274,
+      "max": 18.43870000000061
+    },
+    "listToConfirmMs": {
+      "mean": 51.57216500000013,
+      "median": 51.624500000000126,
+      "p95": 52.944400000000314,
+      "min": 48.74709999999959,
+      "max": 53.30869999999959
+    },
+    "buyToConfirmMs": {
+      "mean": 34.786405000000016,
+      "median": 34.99189999999999,
+      "p95": 36.98979999999938,
+      "min": 30.874899999999798,
+      "max": 37.258600000000115
+    }
+  }
+}

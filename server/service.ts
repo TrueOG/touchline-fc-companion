@@ -108,7 +108,9 @@ export class Companion {
         if (attempt.code === 'eligible') {
           control.assertActive();
           attempt.phase = 'confirming';
-          await this.store.save(this.saved);
+          // The Search checkpoint already holds the review lock. The purchase
+          // callback below persists the complete observation and submitted intent
+          // before any Buy Now click, avoiding an intermediate full-history write.
           attempt.code = await this.reader.purchase(target, maxPrice, attempt.observation, async () => {
             // Persist intent BEFORE the final confirmation; never repeat a possibly submitted purchase.
             control.assertActive();

@@ -74,7 +74,8 @@ describe('manual single-shot controller', () => {
   });
   it('persists the purchase boundary before a buy and locks after an uncertain submission', async () => {
     reader.purchase = async (_target,_cap,_observation,beforeSubmit) => {
-      expect(store.value.history[0]?.phase).toBe('confirming');
+      expect(store.value.history[0]?.phase).toBe('searching');
+      expect(store.value.pendingId).toBe(store.value.history[0]?.id);
       await beforeSubmit();
       expect(store.value.history[0]?.phase).toBe('submitted');
       throw new Error('connection lost after clicking');
