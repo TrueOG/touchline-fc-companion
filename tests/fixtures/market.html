@@ -1,0 +1,80 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><div id="screen"></div><script>
+const opts = window.fixtureOptions || {};
+const state = {searches:0,buys:0,confirms:0,bids:0,limit:'',player:'',minBid:'',filters:[],bioOpens:0,rowClicks:0,events:[],bidClears:0,buyClears:0,resets:0,nameEdits:0,selections:0,maxEdits:0,maxSteps:0,minEdits:0};
+window.testState = state;
+let price = opts.price || 5900;
+const money = n => new Intl.NumberFormat('en-US').format(n);
+const nav = title => '<div class="ut-navigation-bar-view"><button class="ut-navigation-button-control" onclick="openForm()">Back</button><h1>'+title+'</h1></div>';
+const card = () => '<div class="entityContainer"><div class="'+(opts.rowStyle || (opts.imageNotLoaded?'small player item common':'small player item common ut-item-loaded'))+'"><span class="rating">87</span></div><div class="name">'+(opts.rowName || 'Rúben Dias')+'</div></div><div class="auctionValue"><span class="label">Buy Now:</span><span class="value">'+money(price)+'</span></div>';
+const row = () => '<li class="listFUTItem has-auction-data selected">'+card()+'<div class="auction-state"><span class="time">'+(opts.expired?'Processing...':'1 Minute')+'</span></div></li>';
+const fields = {'Full Name':opts.changedIdentity?'Other Player':'Rúben Santos Gato Alves Dias','Known As':'Rúben Dias','Rarity':'Gold Common','Club':'Manchester City','Country/Region':'Portugal','League':'Premier League','Preferred Position':'CB','Date of Birth':'05/14/1997'};
+const bio = () => '<div class="ut-navigation-container-view ui-layout-right"><div class="ut-navigation-bar-view"><button class="ut-navigation-button-control" onclick="detail()">Back</button><h1>Player Bio</h1></div><div class="listFUTItem has-auction-data">'+card()+'</div><button>Info</button>'+Object.entries(fields).map(([k,v])=>'<div class="ut-item-bio-row-view"><h1>'+k+'</h1><h2>'+v+'</h2></div>').join('')+'</div>';
+let committedPrice='', committedMin='', retainedForm=null;
+const screen = document.getElementById('screen');
+function openForm() {
+  if(retainedForm) {screen.replaceChildren(retainedForm);return;}
+  screen.innerHTML=nav('Search the Transfer Market')+'<button>Players</button><button onclick="resetForm()">Reset</button><div class="ut-player-search-control"><input placeholder="Type Player Name" oninput="state.nameEdits++" onkeyup="suggest()"></div><div class="playerResultsList"></div><div class="search-prices"><h1>Bid Price:</h1><button onclick="clearBid()">Clear</button><div class="price-filter"><input oninput="state.minEdits++"><button class="increment-value" onclick="adjustMin(1)">+</button><button class="decrement-value" onclick="adjustMin(-1)">-</button></div><div class="price-filter"><input></div><h1>Buy Now Price:</h1><button onclick="clearBuy()">Clear</button><div class="price-filter"><input></div><div class="price-filter"><input oninput="state.maxEdits++"><button class="increment-value" onclick="adjust(50)">+</button><button class="decrement-value" onclick="adjust(-50)">-</button></div></div><button onclick="search()">Search</button>';
+  retainedForm=document.createElement('div');retainedForm.append(...screen.childNodes);screen.append(retainedForm);
+}
+function resetForm(){state.resets++;committedPrice='';committedMin='';retainedForm=null;openForm();}
+function adjust(delta) {state.maxSteps++;const input=document.querySelectorAll('.search-prices input')[3];input.value=Number(input.value)+delta;committedPrice=input.value;}
+function adjustMin(direction) {
+  const input=document.querySelectorAll('.search-prices input')[0];
+  // Like the observed EA failure: blank typing does not clear committed state.
+  const value=Number((input.value || committedMin).replaceAll(',',''));
+  const step=value < 1000 ? 50 : value < 10000 ? 100 : 250;
+  input.value=opts.brokenMin?'oops':direction===1?(value===0?150:value+step):(value===150?'':value-step);
+  committedMin=input.value;
+}
+function clearBid() {
+  state.bidClears++;
+  if(opts.brokenClear)return;
+  const inputs=document.querySelectorAll('.search-prices input');
+  inputs[0].value='';inputs[1].value='';committedMin='';
+}
+function clearBuy() {
+  state.buyClears++;
+  const inputs=document.querySelectorAll('.search-prices input');
+  inputs[2].value='';inputs[3].value='';committedPrice='';
+}
+function suggest() { document.querySelector('.playerResultsList').innerHTML='<button onclick="choose()"><span class="btn-text">Rúben Dias</span> <span class="btn-subtext">87</span></button>'; }
+function choose() { state.selections++;document.querySelector('.ut-player-search-control').classList.add('has-selection');document.querySelector('[placeholder]').value='Rúben Dias';document.querySelector('.playerResultsList').innerHTML=''; }
+function search() {
+  state.searches++;state.events.push('search');state.minBid=committedMin;state.filters.push(committedMin);state.limit=committedPrice;state.player=document.querySelector('[placeholder]').value;
+  screen.innerHTML=nav('Search Results')+(opts.empty?'<h2>No results found</h2>':resultList()+'<div id="detail"></div>');
+  if(!opts.empty)detail();
+  if(!opts.empty && opts.hydrationDelay) {
+    const cards=Array.from(document.querySelectorAll('.SearchResults .player.item'));
+    const labels=Array.from(document.querySelectorAll('.SearchResults .entityContainer > .name'));
+    cards.forEach(card=>card.classList.remove('ut-item-loaded'));
+    const names=labels.map(label=>label.textContent); labels.forEach(label=>label.textContent='');
+    if(!opts.neverHydrate)setTimeout(()=>{cards.forEach(card=>card.classList.add('ut-item-loaded'));labels.forEach((label,i)=>label.textContent=names[i]);},opts.hydrationDelay);
+  }
+}
+function resultList() {
+  const prices=opts.prices || [price];
+  const original=price;
+  const rows=prices.map((amount,index)=>{
+    price=amount;
+    let markup=row();
+    if(index>0 || opts.noSelection)markup=markup.replace(' selected','');
+    return markup.replace('<li ', '<li onclick="selectResult(this,'+amount+')" ');
+  }).join('');
+  price=original;
+  return '<section class="SearchResults ui-layout-left"><div class="paginated-item-list ut-pinned-list'+(opts.paginated?' paginated':'')+'"><ul>'+rows+'</ul></div></section>';
+}
+function selectResult(element,amount) {
+  state.rowClicks++;state.events.push('select');
+  document.querySelectorAll('.SearchResults .listFUTItem').forEach(row=>row.classList.remove('selected'));
+  element.classList.add('selected');price=amount;detail();
+}
+function detail() { document.getElementById('detail').innerHTML='<button onclick="showBio()">Player Bio</button><button class="btn-standard bidButton" onclick="state.bids++">Make Bid</button><button class="btn-standard '+(opts.bidMislabel?'bidButton':'buyButton currency-coins')+'" onclick="buy()">Buy Now for '+money(price)+'</button>'; }
+function showBio() { state.bioOpens++;state.events.push('bio'); document.getElementById('detail').innerHTML=bio(); }
+function buy() {
+  state.buys++;state.events.push('buy');
+  document.body.insertAdjacentHTML('beforeend','<section class="ea-dialog-view"><h1 class="ea-dialog-view--title">'+(opts.wrongDialog?'Unexpected':'Get Now')+'</h1><p class="ea-dialog-view--msg">Are you sure you want to get this item for '+money(opts.confirmPrice||price)+' FUT Coins?</p><button onclick="confirmBuy()">Ok</button><button>Cancel</button></section>');
+}
+function confirmBuy() { state.confirms++;state.events.push('confirm');document.querySelector('.ea-dialog-view').remove();if(opts.response)setTimeout(()=>{const dialog=document.createElement('section');dialog.className='ea-dialog-view';const msg=document.createElement('p');msg.className='ea-dialog-view--msg';msg.textContent=opts.response;dialog.append(msg);document.body.append(dialog);},100); }
+screen.innerHTML=nav('Search Results')+'<section class="SearchResults ui-layout-left"><div class="paginated-item-list ut-pinned-list paginated"><ul>'+row().replace('1 Minute','Processing...')+'</ul></div></section><div id="detail"></div>';detail();
+if(opts.block)document.body.insertAdjacentHTML('beforeend','<section class="ea-dialog-view">Security check</section>');
+</script></body></html>

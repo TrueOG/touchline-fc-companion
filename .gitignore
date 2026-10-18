@@ -1,0 +1,15 @@
+node_modules/
+dist/
+data/
+test-results/
+playwright-report/
+*.log
+.env
+.env.*
+!.env.example
+.tmp/
+# Local EA account screenshots and diagnostic captures
+docs/screenshots/
+docs/live-*.json
+*.pem
+*.key

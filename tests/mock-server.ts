@@ -1,0 +1,13 @@
+import express from 'express';
+import { resolve } from 'node:path';
+import { Companion } from '../server/service.js';
+import { MockReader } from '../server/mock.js';
+import { emptyState, type StateStore } from '../server/store.js';
+import { createApp } from '../server/http.js';
+const reader = new MockReader();
+const store: StateStore = {load:async()=>emptyState(),save:async()=>{}};
+const service = new Companion(reader,store,emptyState());
+const app=createApp(service,3211,reader);
+app.use(express.static(resolve('dist/client')));
+app.get('/{*path}',(_req,res)=>res.sendFile(resolve('dist/client/index.html')));
+app.listen(3211,'127.0.0.1');
