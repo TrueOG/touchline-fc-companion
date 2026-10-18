@@ -1,6 +1,6 @@
-<!doctype html><html><head><meta charset="utf-8"></head><body><div id="screen"></div><script>
+<!doctype html><html><head><meta charset="utf-8"></head><body><div class="view-navbar-currency-coins">100,000</div><div id="screen"></div><script>
 const opts = window.fixtureOptions || {};
-const state = {searches:0,buys:0,confirms:0,bids:0,limit:'',player:'',minBid:'',filters:[],bioOpens:0,rowClicks:0,events:[],bidClears:0,buyClears:0,resets:0,nameEdits:0,selections:0,maxEdits:0,maxSteps:0,minEdits:0};
+const state = {searches:0,buys:0,confirms:0,bids:0,limit:'',player:'',minBid:'',filters:[],bioOpens:0,rowClicks:0,events:[],cancels:0,bidClears:0,buyClears:0,resets:0,nameEdits:0,selections:0,maxEdits:0,maxSteps:0,minEdits:0};
 window.testState = state;
 let price = opts.price || 5900;
 const money = n => new Intl.NumberFormat('en-US').format(n);
@@ -72,9 +72,12 @@ function detail() { document.getElementById('detail').innerHTML='<button onclick
 function showBio() { state.bioOpens++;state.events.push('bio'); document.getElementById('detail').innerHTML=bio(); }
 function buy() {
   state.buys++;state.events.push('buy');
-  document.body.insertAdjacentHTML('beforeend','<section class="ea-dialog-view"><h1 class="ea-dialog-view--title">'+(opts.wrongDialog?'Unexpected':'Get Now')+'</h1><p class="ea-dialog-view--msg">Are you sure you want to get this item for '+money(opts.confirmPrice||price)+' FUT Coins?</p><button onclick="confirmBuy()">Ok</button><button>Cancel</button></section>');
+  document.body.insertAdjacentHTML('beforeend','<section class="ea-dialog-view"><h1 class="ea-dialog-view--title">'+(opts.wrongDialog?'Unexpected':'Get Now')+'</h1><p class="ea-dialog-view--msg">Are you sure you want to get this item for '+money(opts.confirmPrice||price)+' FUT Coins?</p><button onclick="confirmBuy()">Ok</button><button onclick="state.cancels++;document.querySelector(\'.ea-dialog-view\').remove()">Cancel</button></section>');
 }
-function confirmBuy() { state.confirms++;state.events.push('confirm');document.querySelector('.ea-dialog-view').remove();if(opts.response)setTimeout(()=>{const dialog=document.createElement('section');dialog.className='ea-dialog-view';const msg=document.createElement('p');msg.className='ea-dialog-view--msg';msg.textContent=opts.response;dialog.append(msg);document.body.append(dialog);},100); }
+function confirmBuy() {
+  if(opts.balanceOnly || opts.won) setTimeout(()=>{document.querySelector('.view-navbar-currency-coins').textContent=money(100000-price);},opts.balanceDelay||0);
+  if(opts.won)setTimeout(()=>{document.getElementById('detail').insertAdjacentHTML('beforeend','<p>Congratulations, you\'ve won this item for'+(opts.splitWon?'':' ')+(opts.splitWon?'<span style="display:block">'+money(opts.wonPrice||price)+'</span>':money(opts.wonPrice||price))+'</p>');},opts.wonDelay||0);
+  state.confirms++;state.events.push('confirm');document.querySelector('.ea-dialog-view').remove();if(opts.response)setTimeout(()=>{const dialog=document.createElement('section');dialog.className='ea-dialog-view';const msg=document.createElement('p');msg.className='ea-dialog-view--msg';msg.textContent=opts.response;dialog.append(msg);document.body.append(dialog);},100); }
 screen.innerHTML=nav('Search Results')+'<section class="SearchResults ui-layout-left"><div class="paginated-item-list ut-pinned-list paginated"><ul>'+row().replace('1 Minute','Processing...')+'</ul></div></section><div id="detail"></div>';detail();
 if(opts.block)document.body.insertAdjacentHTML('beforeend','<section class="ea-dialog-view">Security check</section>');
 </script></body></html>

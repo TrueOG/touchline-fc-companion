@@ -27,7 +27,7 @@ let closing = false;
 async function shutdown() {
   if (closing) return; closing = true;
   server.close();
-  await reader.close().catch(() => {});
+  await service.shutdown().catch(() => {});
   process.exit(0);
 }
 process.on('SIGINT', () => { void shutdown(); });

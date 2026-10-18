@@ -3,8 +3,8 @@ export class AppError extends Error {
   constructor(public code: string, message: string, public status = 400) { super(message); }
 }
 export const identityKeys = ['fullName', 'rarity', 'rating', 'club', 'country', 'league', 'position', 'birthDate'] as const;
-// Loading state and CSS token order do not identify the card edition.
-export const cardStyleKey = (style: string) => [...new Set(style.split(/\s+/).filter(token => token && token !== 'ut-item-loaded'))].sort().join(' ');
+import { cardStyleKey } from './card-style.js';
+export { cardStyleKey } from './card-style.js';
 export function evaluateListing(target: Target, maxPrice: number, observation: ListingObservation): ResultCode {
   if (!Number.isSafeInteger(observation.price) || observation.price < 1 || !Number.isInteger(observation.card.rating) || observation.card.rating < 1 || observation.card.rating > 99 || !observation.card.fullName || !observation.cardStyle || !Number.isSafeInteger(observation.rowIndex) || observation.rowIndex < 0) return 'ui_changed';
   const age = Date.now() - Date.parse(observation.observedAt);

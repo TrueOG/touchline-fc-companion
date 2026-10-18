@@ -70,3 +70,39 @@ test('real DOM reader fixture: stale bio, changed price, missing identity and no
   expect(await page.locator('body').getAttribute('data-clicked')).toBeNull();
   await page.setContent('<button>Login</button>'); expect(await collect()).toEqual({error:'session_expired'});
 });
+
+test('automatic run survives reload, stops on request, and finishes after one verified purchase',async({page,request})=>{
+  await request.post('/api/test/scenario',{headers,data:{scenario:'no_player'}});
+  await request.post('/api/browser/open',{headers,data:{}});
+  await request.post('/api/test/scenario',{headers,data:{scenario:'eligible'}});
+  await request.post('/api/targets/capture',{headers,data:{}});
+  await request.post('/api/test/scenario',{headers,data:{scenario:'no_player'}});
+  await page.goto('/');await page.getByLabel('Maksimum alış fiyatı').fill('75000');
+  await page.getByLabel('Minimum teklif dönüş sınırı').fill('500');
+  await page.getByLabel('Süre (saniye)',{exact:true}).fill('30');await page.getByLabel('Deneme aralığı (saniye)',{exact:true}).fill('0.1');
+  await page.getByRole('button',{name:'Otomatik başlat',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Durdur',exact:true})).toBeEnabled();await expect(page.getByRole('button',{name:'Bir kez ara ve al'})).toBeDisabled();
+  await page.reload();await expect(page.getByLabel('Minimum teklif dönüş sınırı')).toHaveValue('500');await expect(page.getByLabel('Minimum teklif dönüş sınırı')).toBeDisabled();await expect(page.getByRole('button',{name:'Durdur',exact:true})).toBeEnabled();await expect(page.getByLabel('Süre (saniye)',{exact:true})).toHaveValue('30');await expect(page.getByLabel('Deneme aralığı (saniye)',{exact:true})).toHaveValue('0.1');await expect(page.getByLabel('Maksimum alış fiyatı')).toBeDisabled();
+  await page.getByRole('button',{name:'Durdur',exact:true}).click();await expect(page.getByText('Kullanıcı durdurdu.',{exact:true})).toBeVisible();
+  await request.post('/api/test/scenario',{headers,data:{scenario:'purchased'}});
+  await page.getByRole('button',{name:'Otomatik başlat',exact:true}).click();
+  await expect(page.getByText('Satın alındı — çalışma tamamlandı',{exact:true})).toBeVisible();
+  const state=await (await request.get('/api/state')).json();expect(state.runs[0].attempts).toBe(1);expect(state.pendingId).toBeNull();
+  await page.getByText('Otomatik çalışma performansı',{exact:false}).click();
+  await page.screenshot({path:'test-results/automatic-desktop.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:'test-results/automatic-mobile.png',fullPage:true});
+  // Keep the independent legacy scenario deterministic.
+  await request.post('/api/test/scenario',{headers,data:{scenario:'eligible'}});
+});
+
+test('history pages and rolling counter include all searches without counting reads',async({page,request})=>{
+ await request.post('/api/test/scenario',{headers,data:{scenario:'no_player'}});
+ const before=await (await request.get('/api/state')).json();const targetId=before.activeTargetId;
+ for(let i=0;i<55;i++)await request.post('/api/attempts',{headers,data:{id:crypto.randomUUID(),targetId,maxPrice:75000,autoBuy:true}});
+ const after=await (await request.get('/api/state')).json();expect(after.searchesLastHour.count).toBe(before.searchesLastHour.count+55);
+ await page.goto('/');await expect(page.getByLabel('Arama sayacı')).toContainText(String(after.searchesLastHour.count));
+ await page.getByText('Geçmiş kontroller',{exact:false}).click();await expect(page.locator('details').filter({hasText:'Geçmiş kontroller'}).locator('tbody tr')).toHaveCount(50);
+ await page.getByRole('button',{name:'Sonraki',exact:true}).click();await expect(page.getByText('Sayfa 2 /',{exact:false})).toBeVisible();
+ expect((await (await request.get('/api/state')).json()).searchesLastHour.count).toBe(after.searchesLastHour.count);
+});

@@ -87,3 +87,12 @@ footer div { display: flex; gap: 18px; }
 footer button { border: 0; padding: 0; color: #9caf92; background: transparent; font-size: 10px; }
 footer button:hover:not(:disabled) { background: transparent; color: #d3e6c0; }
 @media(max-width:760px) { .app { padding: 0 18px 22px; } .workspace { grid-template-columns: 1fr; gap: 16px; } .connection { grid-template-columns: 1fr; } .secondary { justify-self: start; margin-left: 20px; } .intro { margin-top: 28px; } h1 { font-size: 28px; } .panel { padding: 20px; } .empty-result { min-height: 210px; } .topbar { height: 64px; } }
+ .auto-controls { border-top: 1px solid #32422e; margin-top: 24px; padding-top: 20px; }
+ .auto-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+ .auto-fields label { font-size: 12px; line-height: 1.5; }
+ .auto-fields input { box-sizing: border-box; width: 100%; margin-top: 6px; padding: 12px; background: #111b14; color: #e5eddc; border: 1px solid #3b4e35; border-radius: 8px; }
+ .run-status { margin-top: 16px; padding: 16px; border: 1px solid #41513b; border-radius: 10px; font-size: 13px; }
+ .stop-button { width: 100%; padding: 12px; border: 1px solid #b38370; background: #442c25; color: #ffe8df; border-radius: 8px; cursor: pointer; }
+ .performance { border-top: 1px solid #32422e; margin-top: 20px; padding-top: 12px; }
+ .performance dl > div { display: flex; justify-content: space-between; gap: 12px; margin: 8px 0; font-size: 12px; }
+ .performance dd { margin: 0; font-variant-numeric: tabular-nums; }

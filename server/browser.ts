@@ -1,3 +1,4 @@
+import type { AttemptControl, PurchaseResult } from './attempt-control.js';
 import { chromium, type Browser, type Page } from 'playwright';
 import { readFile, stat } from 'node:fs/promises';
 import type { Observation, ResultCode, SearchObservation, Target } from '../shared/model.js';
@@ -5,14 +6,17 @@ import { AppError, validIdentity } from './domain.js';
 const EA_URL = 'https://www.ea.com/ea-sports-fc/ultimate-team/web-app/';
 export interface SearchOptions {
   /** undefined = first search; null = last search used an empty minimum. */
+  control?: AttemptControl;
+  minBidResetAt?: number;
   previousMinBid: number | null | undefined;
   beforeSearch: (minBid: number | null) => Promise<void>;
 }
 export interface Reader {
+  inspect?(): Promise<unknown>;
   readonly mode: 'live' | 'mock'; isOpen(): boolean; open(): Promise<void>; close(): Promise<void>;
   read(): Promise<Observation>;
   search(target: Target, maxPrice: number, options: SearchOptions): Promise<SearchObservation>;
-  purchase(target: Target, maxPrice: number, observation: SearchObservation, beforeSubmit: () => Promise<void>): Promise<'purchase_unverified' | 'purchased'>;
+  purchase(target: Target, maxPrice: number, observation: SearchObservation, beforeSubmit: () => Promise<void>, control?: AttemptControl): Promise<PurchaseResult>;
 }
 export class LiveBrowser implements Reader {
   readonly mode = 'live' as const;
@@ -20,6 +24,15 @@ export class LiveBrowser implements Reader {
   private page?: Page;
   private flow?: typeof import('./market.js');
   isOpen() { return Boolean(this.browser?.isConnected() && this.page && !this.page.isClosed()); }
+  async inspect() {
+    if (!this.isOpen()) throw new AppError('disconnected', 'Önce EA penceresini açın.');
+    return this.page!.evaluate(() => {
+      const shown=(el:Element)=>el.getClientRects().length>0 && getComputedStyle(el).visibility!=='hidden';
+      const currency=Array.from(document.querySelectorAll('[class*="coin"], [class*="credit"]')).filter(shown).map(el=>({tag:el.tagName,classes:el.className,text:el.textContent?.trim(),top:el.getBoundingClientRect().top})).filter(x=>x.text && /^[\d,]+$/.test(x.text)).slice(0,20);
+      const messages=Array.from(document.querySelectorAll('.ea-dialog-view--msg')).filter(shown).map(el=>el.textContent?.trim());
+      return {currency,messages};
+    });
+  }
   async open() {
     if (this.isOpen()) { await this.page!.bringToFront(); return; }
     await this.close();
@@ -70,11 +83,11 @@ export class LiveBrowser implements Reader {
       throw error;
     }
   }
-  async purchase(target: Target, maxPrice: number, observation: SearchObservation, beforeSubmit: () => Promise<void>) {
+  async purchase(target: Target, maxPrice: number, observation: SearchObservation, beforeSubmit: () => Promise<void>, control?: AttemptControl) {
     if (!this.isOpen()) throw new AppError('disconnected', 'EA penceresi kapandı.', 409);
     if (!this.flow) throw new AppError('unknown', 'Arama akışı doğrulanamadı.');
     if (observation.verification !== 'listing') throw new AppError('ui_changed', 'Yeni aramanın ilan verisi gerekli.');
-    return this.flow.buyVerifiedListing(this.page!, target, maxPrice, observation, beforeSubmit);
+    return this.flow.buyVerifiedListing(this.page!, target, maxPrice, observation, beforeSubmit, undefined, control);
   }
 }
-export const readerErrors = new Set<ResultCode>(['session_expired','disconnected','ui_changed','unknown','listing_gone','no_player','price_changed','wrong_player','wrong_version','price_high']);
+export const readerErrors = new Set<ResultCode>(['cancelled','purchase_failed','session_expired','disconnected','ui_changed','unknown','listing_gone','no_player','price_changed','wrong_player','wrong_version','price_high']);

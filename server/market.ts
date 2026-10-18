@@ -1,6 +1,8 @@
+import type { AttemptControl, PurchaseResult } from './attempt-control.js';
 import type { Page } from 'playwright';
 import type { ListingObservation, Target } from '../shared/model.js';
-import { AppError, cardStyleKey, evaluateListing } from './domain.js';
+import { AppError, evaluateListing } from './domain.js';
+import { cardStyleKey } from './card-style.js';
 import { writeActionAudit, type ActionAudit } from './action-audit.js';
 import type { SearchOptions } from './browser.js';
 
@@ -60,6 +62,7 @@ async function waitForListingData(page: Page) {
 
 /** Exactly one Search click, first page only. No retries or background market queries. */
 export async function searchMarketOnce(page: Page, target: Target, maxPrice: number, options: SearchOptions): Promise<ListingObservation> {
+  options.control?.assertActive();
   await guard(page);
   if (!target.searchName || !target.cardStyle) throw new AppError('ui_changed', 'Hedef kartı Info üzerinden yeniden alın.');
   if (await page.getByRole('heading', { name: 'Search Results', exact: true }).isVisible()) await backFrom(page, 'Search Results');
@@ -111,8 +114,8 @@ export async function searchMarketOnce(page: Page, target: Target, maxPrice: num
   const minUp = minSpinner.locator('button.increment-value');
   let minBid: number | null = null;
   if (options.previousMinBid == null && await min.inputValue() !== '') await clearBid();
-  if (options.previousMinBid !== undefined) {
-    const previous = options.previousMinBid;
+  if (options.previousMinBid !== undefined || options.minBidResetAt !== undefined) {
+    const previous = options.previousMinBid ?? null;
     if (previous !== null) {
       if (!Number.isSafeInteger(previous) || previous < 150 || previous >= maxPrice) throw new AppError('ui_changed', 'Minimum teklif sırası geçersiz.');
       if (coinValue(await min.inputValue()) !== previous) {
@@ -127,8 +130,15 @@ export async function searchMarketOnce(page: Page, target: Target, maxPrice: num
     await minUp.click({ timeout: 3000 });
     const next = coinValue(await min.inputValue());
     if (!Number.isSafeInteger(next) || next > 15000000 || (previous === null ? next !== 150 : next <= previous)) throw new AppError('ui_changed', 'EA minimum teklif artışı doğrulanamadı.');
-    if (next < maxPrice) minBid = next;
-    else await clearBid();
+    if (next < (options.minBidResetAt ?? maxPrice)) minBid = next;
+    else {
+      await clearBid();
+      if(options.minBidResetAt !== undefined){
+        await minUp.click({timeout:3000});
+        if(coinValue(await min.inputValue())!==150)throw new AppError('ui_changed','Minimum teklif 150’ye döndürülemedi.');
+        minBid=150;
+      }
+    }
   }
   if ((minBid === null ? await min.inputValue() !== '' : coinValue(await min.inputValue()) !== minBid) ||
       coinValue(await max.inputValue()) !== maxPrice ||
@@ -137,21 +147,33 @@ export async function searchMarketOnce(page: Page, target: Target, maxPrice: num
   await guard(page);
   const search = page.getByRole('button', { name: 'Search', exact: true });
   await search.click({ trial: true, timeout: 3000 });
+  options.control?.assertActive();
   await options.beforeSearch(minBid);
+  options.control?.assertActive();
+  options.control?.mark('search');
   await search.click({ timeout: 3000 });
   await page.getByRole('heading', { name: 'Search Results', exact: true }).waitFor({ state: 'visible', timeout: 10000 })
     .catch(() => { throw new AppError('ui_changed', 'Search tıklandı ancak Search Results ekranı doğrulanamadı.'); });
   await resultRows(page).first().or(page.getByRole('heading', { name: 'No results found', exact: true }).filter({ visible: true })).waitFor({ state: 'visible', timeout: 10000 })
     .catch(() => { throw new AppError('ui_changed', 'Search Results açıldı ancak ilan listesi veya boş sonuç mesajı doğrulanamadı.'); });
+  options.control?.mark('list');
+  options.control?.assertActive();
   await guard(page);
   if (await page.getByRole('heading', { name: 'No results found', exact: true }).isVisible()) throw new AppError('no_player', 'Bu aramada uygun ilan bulunamadı.');
   await waitForListingData(page);
+  options.control?.mark('card');
+  options.control?.assertActive();
   await guard(page);
   const candidate = (await listings(page))[0];
   if (!candidate) throw new AppError('no_player', 'İlan bulunamadı.');
   const observation = observeRow(candidate);
   const verdict = evaluateListing(target, maxPrice, observation);
-  if (verdict !== 'eligible') throw new AppError(verdict, 'İlk ilanın görünen kart bilgileri veya fiyatı uygun değil; satın alma başlatılmadı.');
+  if (verdict !== 'eligible') {
+    const detail = verdict === 'wrong_version'
+      ? ` Beklenen puan: ${target.rating}; görünen puan: ${observation.card.rating}. Beklenen kart: ${cardStyleKey(target.cardStyle)}; görünen kart: ${cardStyleKey(observation.cardStyle)}.`
+      : '';
+    throw new AppError(verdict, `İlk ilanın görünen kart bilgileri veya fiyatı uygun değil; satın alma başlatılmadı.${detail}`);
+  }
   if (!candidate.selected) await resultRows(page).nth(candidate.index).click({ timeout: 3000 });
   // Stay on Search Results. No Player Bio, Info, back navigation or cheapest-row scan.
   return observation;
@@ -159,12 +181,12 @@ export async function searchMarketOnce(page: Page, target: Target, maxPrice: num
 
 function observeRow(row: Awaited<ReturnType<typeof listings>>[number]): ListingObservation {
   return { verification: 'listing', card: { fullName: row.name, rating: row.rating },
-    cardStyle: row.style, rowIndex: row.index, price: coinValue(row.price), timeText: row.time,
+    cardStyle: cardStyleKey(row.style), rowIndex: row.index, price: coinValue(row.price), timeText: row.time,
     available: activeTime.test(row.time), observedAt: new Date().toISOString(), source: 'live' };
 }
 
 export async function buyVerifiedListing(page: Page, target: Target, maxPrice: number, observation: ListingObservation,
-  beforeSubmit: () => Promise<void>, audit: ActionAudit = writeActionAudit): Promise<'purchase_unverified' | 'purchased'> {
+  beforeSubmit: () => Promise<void>, audit: ActionAudit = writeActionAudit, control?: AttemptControl): Promise<PurchaseResult> {
   await guard(page);
   const selected = (await listings(page)).filter(row => row.selected);
   const row = selected[0];
@@ -182,9 +204,16 @@ export async function buyVerifiedListing(page: Page, target: Target, maxPrice: n
   });
   const buyText = await buy.innerText();
   if (Date.now() - Date.parse(current.observedAt) > 5000) throw new AppError('unknown', 'Son doğrulama eskidi; satın alma başlatılmadı.');
+  control?.assertActive();
+  const successText = /^Congratulations, you've won this item for\s*([\d,]+)(?: (?:FUT )?Coins)?[.!]?$/;
+  const success = page.getByText(successText).filter({visible:true});
+  if (await success.count()) throw new AppError('unknown', 'Önceki alım bildirimi hâlâ açık; yeni alım yapılmadı.');
+  const balanceBefore = await readBalance(page);
   // Lock durably before any buy click, even if EA changes to a one-click purchase UI.
   await beforeSubmit();
   await receipt('buy_now_requested',buyText);
+  try { control?.assertActive(); } catch (error) { if (error instanceof AppError && error.code==='cancelled') return 'cancelled'; throw error; }
+  control?.mark('buy');
   await buy.click({ timeout: 3000 });
   await receipt('buy_now_clicked',buyText);
   const dialog = page.locator('.ea-dialog-view:visible');
@@ -199,18 +228,43 @@ export async function buyVerifiedListing(page: Page, target: Target, maxPrice: n
   if (await page.locator('iframe:visible').count() || !await dialog.getByRole('button', { name: 'Cancel', exact: true }).isVisible()) throw new AppError('unknown', 'Onay ekranı doğrulanamadı.');
   if (Date.now() - Date.parse(current.observedAt) > 5000) throw new AppError('unknown', 'Onay beklerken doğrulama eskidi; onay verilmedi.');
   await receipt('confirm_requested', 'Get Now → Ok');
+  try { control?.assertActive(); } catch (error) {
+    if (!(error instanceof AppError) || error.code!=='cancelled') throw error;
+    await dialog.getByRole('button',{name:'Cancel',exact:true}).click({timeout:3000});
+    await dialog.waitFor({state:'hidden',timeout:3000});
+    return 'cancelled';
+  }
+  control?.mark('confirm');
   await dialog.getByRole('button', { name: 'Ok', exact: true }).click({ timeout: 3000 });
   await receipt('confirm_clicked', 'Get Now → Ok');
-  // Wait for this confirmation to disappear/change, without issuing any new action.
-  await page.waitForFunction(original => {
-    const text = document.querySelector('.ea-dialog-view .ea-dialog-view--msg')?.textContent?.trim();
-    return text !== original;
-  }, message, { timeout: 5000 }).catch(() => {});
-  // EA can dismiss Get Now first and show a rejection asynchronously afterwards.
-  // Observe that response once; never click it or repeat the purchase.
-  await page.locator('.ea-dialog-view:visible').waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-  const response = (await page.locator('.ea-dialog-view:visible .ea-dialog-view--msg').allTextContents()).join(' ').trim();
-  if (response && response !== message) throw new AppError('unknown', `EA yanıtı: ${response.slice(0,500)} — sonucu kontrol edin.`);
-  // No guessed success selectors: submit once, then require review until a live outcome is audited.
-  return 'purchase_unverified';
+  const deadline=performance.now()+10000;
+  let indicator: string | undefined;
+  let outcome: 'purchased' | 'purchase_unverified' = 'purchase_unverified';
+  let response='';
+  while(performance.now()<deadline) {
+    response=(await page.locator('.ea-dialog-view:visible .ea-dialog-view--msg').allTextContents()).join(' ').trim();
+    if(response && response!==message) break;
+    if(!await page.locator('iframe:visible').count() && !await dialog.isVisible() && await success.count()===1) {
+      const text=(await success.allTextContents())[0]?.replace(/\s+/g,' ').trim() ?? '';
+      const wonPrice=successText.exec(text)?.[1];
+      const winners=(await listings(page)).filter(item=>item.selected);
+      const winner=winners[0];
+      if(wonPrice && coinValue(wonPrice)===current.price && winners.length===1 && winner && winner.index===row.index && winner.name===row.name && winner.rating===row.rating && cardStyleKey(winner.style)===cardStyleKey(row.style)) {
+        outcome='purchased';indicator=text;control?.mark('purchased');break;
+      }
+    }
+    await new Promise(resolve=>setTimeout(resolve,100));
+  }
+  const balanceAfter=await readBalance(page);
+  control?.evidence({balanceBefore,balanceAfter,price:current.price,outcome,indicator,observedAt:new Date().toISOString()});
+  if(response && response!==message) throw new AppError('unknown', 'EA yanıtı: '+response.slice(0,500)+' — sonucu kontrol edin.');
+  return outcome;
+}
+
+// Observed in the live EA header on 2026-10-18; never infer zero from missing UI.
+async function readBalance(page: Page): Promise<number | undefined> {
+  const values=await page.locator('.view-navbar-currency-coins').filter({visible:true}).allTextContents();
+  if(values.length!==1)return undefined;
+  const text=values[0]!.trim();const amount=text==='0'?0:coinValue(text);
+  return Number.isSafeInteger(amount)?amount:undefined;
 }

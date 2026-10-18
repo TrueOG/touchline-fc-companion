@@ -1,4 +1,4 @@
-# Touchline — Tek arama, tek alım
+# Touchline — Manuel ve otomatik deneme
 
 Bu repoda kaynak kod, testler ve kurulum belgeleri bulunur. Yerel `data/` kayıtları, EA ekran görüntüleri ve `docs/live-*.json` tanılama dosyaları Git'e dahil edilmez. İnceleme belgelerindeki bu dosyalara bağlantılar yalnızca geliştirme bilgisayarında açılır.
 
@@ -11,10 +11,20 @@ Türkçe React paneli, yerel Node sunucusu ve görünür Playwright tarayıcıs�
 3. **Maksimum alış fiyatı** gir. **Bir kez ara ve al** düğmesi bir yeni Search başlatır. Bu düğme, hedef kartı belirtilen coin sınırında satın alma talimatıdır.
 4. Uygulama aynı oyuncu seçiliyse adı yeniden yazmaz; maksimum Buy Now tutarı doğruysa bu alana dokunmaz. Ardışık denemelerde yalnızca minimum teklif ilerler ve bir kez Search yapılır. Oyuncu seçimi kaybolur/değişirse veya diğer fiyat alanları dolarsa form yeniden hazırlanır. Yalnızca alış sınırı değişmişse oyuncu korunarak fiyat güncellenir. İlk görünür sonucu kullanır. Zaten seçiliyse tekrar tıklamaz. Sonuçtan sonra Player Bio / Info açılmaz, geri dönülmez ve daha ucuz ilan aranmaz. Görünen ad, puan, kart sınıfları, aktif süre ve fiyat kontrol edilir; kart görselinin yüklenmesi beklenmez.
 5. Uygunsa Buy Now ve gerçek **Get Now → Ok** onayı bir kez tıklanır. Onay fiyatı, seçili kart veya ilan durumu değişirse son onay verilmez. Uygun ilan yoksa durur. Yeni arama, sayfalama, otomatik tekrar veya zamanlayıcı yoktur.
-6. Satın alma aşamasına girildikten sonra sonuç manuel kontrol için kilitlenir. **Gerçek başarı/başarısızlık göstergeleri henüz canlı işlemle doğrulanmadığından otomatik başarı iddia edilmez.** EA'daki sonucu kontrol edip panelde bildir. Belirsiz sonuçta tekrar alım yapılmaz.
+6. Satın alma aşamasına girildikten sonra sonuç en fazla 10 saniye gözlenir; doğrulanamayan sonuç manuel kontrol için kilitlenir. **Başarı, seçili kartla ve onaylanan tutarla eşleşen “Congratulations, you've won this item for …” mesajıyla doğrulanır. Tek başına bakiye düşmesi yeterli değildir. Belirsiz sonuçta** EA'daki sonucu kontrol edip panelde bildir. Belirsiz sonuçta tekrar alım yapılmaz.
 7. Aynı hedefle yeni deneme için yeniden Info açman gerekmez; EA arama formu veya Search Results ekranında olman yeterlidir. Başka oyuncu için Info kartını yeniden al.
 
 Eski sürümden kayıtlı hedeflerin arama adı ve kart görünümü bilgisi eksiktir; yeni akış için **Info kartını al** bir kez daha kullanılmalıdır. Önceki geçmiş ve hedefler korunur. Eski açık-ilan okumaları panelde önceki sürüm olarak etiketlenir.
+
+## Otomatik deneme ve süreler
+
+**Bir kez ara ve al** tek deneme yapmaya devam eder. **Otomatik başlat**, seçili kart ve maksimum fiyatla süreli çalışma başlatır. Varsayılan süre 3600 saniye, aralık 5 saniyedir. Aralık 0: önceki deneme biter bitmez yenisi başlar. Aralık başlangıçlar arasında ölçülür; denemeler çakışmaz ve gecikmiş denemeler biriktirilmez.
+
+Panel kapansa da yerel sunucu ve EA penceresi açıkken çalışma sürer. **Durdur**, yeni Search / Buy Now / onay gönderilmesini engeller. Daha önce gönderilmiş onay geri alınmaz; sonucu gözlenir. İlk doğrulanmış alımda veya süre dolunca çalışma biter. Beklenmeyen EA ekranı, bağlantı/kayıt hatası ve belirsiz alımda durur. Yeniden başlatmada otomatik devam etmez. Kart ve fiyat çalışma boyunca kilitlidir.
+
+Boş sonuç, yanlış kart, sınır üstü fiyat ve satın alma öncesi kaybolan/değişen ilan sonraki denemeye geçer. **Kesin başarısız alım yanıtının gerçek metni henüz gözlenmediği için canlı adaptör bilinmeyen EA ret mesajını kapatıp tekrar satın alma denemez.** Başarılı mesajın yokluğu veya bakiyenin aynı kalması başarısız alım kanıtı sayılmaz. Genel çalışma motoru doğrulanmış `purchase_failed` sonucundan sonra devam etmeyi destekler; canlı ret seçicisi ancak gözlemle eklenecektir.
+
+Deneme süreleri monoton saatle ölçülür: hazırlık, Search'ten listeye/kart verisine, listeden Buy Now/onaya, Search'ten doğrulanmış alıma ve toplam deneme. Sonuç bekleme toplam süreye dahildir; aralık beklemesi dahil değildir. Eksik aşamalar “—” gösterilir. Çalışma özeti ortalama/en düşük/en yüksek ve örnek sayılarını saklar. Son 200 deneme, son 20 çalışma korunur; eski denemeler budansa da çalışma toplamları korunur. Başlatma kimliği tekrarları bu saklama penceresi içinde ikinci çalışma oluşturmaz.
 
 ## Windows kurulumu
 
@@ -85,6 +95,9 @@ POST çağrıları Content-Type: application/json ve X-Local-Client: touchline i
 
 | Yol | İşlem |
 |---|---|
+| POST /api/runs | id, targetId, maxPrice, durationSeconds (1–86400 tam sayı), intervalSeconds (0–3600, en fazla üç ondalık); sunucuda çalışma başlat |
+| POST /api/runs/:id/stop | Çalışmayı durdur; gönderilmiş onayın sonucunu bekle |
+| GET /api/browser/inspection | Boştayken yalnızca görünür bakiye alanı/EA hata metnini oku; tıklama veya arama yok |
 | GET /api/state | Yerel durum; EA araması yapmaz |
 | POST /api/browser/open | Ayrı EA penceresini aç/göster |
 | POST /api/browser/close | Ayrı pencereyi kapat |
@@ -93,3 +106,11 @@ POST çağrıları Content-Type: application/json ve X-Local-Client: touchline i
 | POST /api/attempts/:id/resolve | resolution: bought / not_bought / unknown, checked: boolean |
 
 Eski istemciler autoBuy: true göndermediğinden sessizce satın alma başlatamaz. Ayrı bir kontrolsüz buy endpoint'i yoktur. Başarılı HTTP yanıtı başarılı satın alma anlamına gelmez.
+
+### Minimum teklif dönüş sınırı
+
+Maksimum alış fiyatının altındaki isteğe bağlı alan, manuel ve otomatik denemelerde minimum teklif döngüsünün üst eşiğini belirler. Örneğin 500: 150 → 200 → … → 450 → 150. Eşiğe eşit veya büyük değer aramada kullanılmaz. 150’den büyük ve alış sınırına eşit veya küçük tam sayı girilir. Boş alan eski boş filtreye dönüş davranışını korur. Panel tercihi tarayıcıda; yürütülen çalışma, deneme ve sıra bilgileri sunucuda saklanır.
+
+### Geçmiş ve arama sayacı
+
+Geçmiş son 30 gün saklanır; çözümlenmemiş işlemler süre dolunca silinmez. GET /api/history?page=1 en yeni kayıtları 50 kayıtlık sayfalarla döndürür. GET /api/state historyTotal ve searchesLastHour bilgisini, son 50 kayıt ile aktif hedef/bekleyen işlem özetini içerir. Sayaç kayan 60 dakikadaki Search öncesi kalıcı kayıtları sayar; tüm HTTP isteklerini saymaz. İletimi belirsiz tıklamalar geri düşülmez. Eski minBid kayıtları yaklaşık zamanla sayılır; önceki 200 sınırında silinmiş kayıtlar geri getirilemez.

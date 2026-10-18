@@ -2,6 +2,22 @@
 
 18 Ekim 2026 · Windows · Node 24.15.0.
 
+## Canlı otomatik boş sonuç kontrolü — 21:55–21:56 (İstanbul)
+
+Kullanıcının başlattığı Lamine Yamal / 192.000 coin çalışması 30 saniyede 5 saniye aralıklarla 6 deneme yaptı. Hepsi no_player; süre sonunda expired ile durdu, pendingId null. Minimum teklif: Boş → 150 → 200 → 250 → 300 → 350. Ortalama hazırlık 577 ms, Search sonrası boş sonuç görünmesi 354 ms (205–835), toplam deneme 936 ms (618–1219). Satın alma aşamasına ulaşılmadığı için canlı başarı algılama ve alım süreleri henüz doğrulanmadı.
+
+## Otomatik çalışma ve performans — 18 Ekim 2026
+
+Manuel deneme korunarak süreli otomatik çalışma, durdurma, kart/fiyat kilidi, yeniden başlatmada kesilme, istatistikler ve monoton saatle aşama ölçümleri eklendi. Varsayılan süre 3600, aralık 5 saniye; 0 aralık önceki deneme bittiğinde devam eder. İlk doğrulanmış alımda durur.
+
+80 birim testi ve toplam 47 Playwright testi geçti. Testler yerel fixture/mock kullanır. Canlı otomatik alım kabul testi henüz yapılmadı.
+
+Salt okunur canlı incelemede bakiye alanı .view-navbar-currency-coins olarak doğrulandı. Kullanıcının bildirdiği Congratulations mesajı aynı seçili kart ve tam fiyatla eşleştirilir. Bakiye tek başına yeterli değildir. Gecikmiş bakiye ve başarı metni test sayfasında doğrulandı.
+
+Kesin başarısız satın alma mesajı henüz bilinmiyor. Canlı adaptör başarı kanıtı yoksa 10 saniye sonra manuel kontrol için durur. Doğrulanmış başarısızlık dönüşü runner testlerinde modellenir; canlı mesaj eşlemesi henüz eklenmedi. Değişiklikler yereldir, push yapılmadı.
+
+Önceki bölümler tarihsel doğrulama kayıtlarıdır.
+
 ## Arama formunu koruma — 04:43
 
 Canlı EA formunda seçili Erling Haaland adı ve 1.000 Buy Now sınırı sonuçlardan geri dönünce korunuyor. Input editable; gerçek seçim üst kapsayıcının `.ut-player-search-control.has-selection` sınıfıyla ayrılıyor. İnceleme: [korunan alanlar](live-retained-form.json).

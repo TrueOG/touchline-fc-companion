@@ -32,6 +32,13 @@ describe('fast result-row verification', () => {
     expect(evaluateListing(target,75000,{...row(),card:{fullName:'Haaland',rating:90}})).toBe('wrong_version');
     expect(evaluateListing(target,75000,{...row(),cardStyle:'small player item special'})).toBe('wrong_version');
   });
+  it('ignores only known loading flags on either card while retaining edition checks', () => {
+    for (const flag of ['ut-item-loading','ut-item-loaded']) {
+      expect(evaluateListing(target,75000,{...row(),cardStyle:row().cardStyle+' '+flag})).toBe('eligible');
+      expect(evaluateListing({...target,cardStyle:'small player item common '+flag},75000,row())).toBe('eligible');
+      expect(evaluateListing(target,75000,{...row(),cardStyle:'small player item special '+flag})).toBe('wrong_version');
+    }
+  });
   it('rejects excessive prices, expired rows and stale readings', () => {
     expect(evaluateListing(target,74999,row())).toBe('price_high');
     expect(evaluateListing(target,75000,{...row(),available:false})).toBe('listing_gone');

@@ -18,14 +18,22 @@ export function createApp(service: Companion, port: number, mock?: MockReader) {
     next();
   });
   app.use(express.json({ limit: '8kb' }));
+  app.get('/api/history', (req,res)=>res.json(service.historyPage(Number(req.query.page??1))));
   app.get('/api/state', (_req, res) => res.json(service.state()));
+  app.get('/api/browser/inspection', async (_req, res) => res.json(await service.inspect()));
+  app.post('/api/runs', async (req, res) => {
+    const b=req.body;
+    if(!b || typeof b.id!=='string' || typeof b.targetId!=='string' || typeof b.maxPrice!=='number' || typeof b.durationSeconds!=='number' || typeof b.intervalSeconds!=='number') throw new AppError('invalid','Çalışma alanları geçersiz.');
+    res.json(await service.startRun(b));
+  });
+  app.post('/api/runs/:id/stop', (req, res) => res.json(service.stopRun(String(req.params.id))));
   app.post('/api/browser/open', async (_req, res) => { await service.open(); res.json(service.state()); });
   app.post('/api/browser/close', async (_req, res) => { await service.close(); res.json(service.state()); });
   app.post('/api/targets/capture', async (_req, res) => res.json(await service.capture()));
   app.post('/api/attempts', async (req, res) => {
     const body: unknown = req.body;
     if (!body || typeof body !== 'object' || !('id' in body) || !('targetId' in body) || !('maxPrice' in body) || typeof body.id !== 'string' || typeof body.targetId !== 'string' || typeof body.maxPrice !== 'number') throw new AppError('invalid', 'İstek alanları geçersiz.');
-    res.json(await service.attempt(body.id, body.targetId, body.maxPrice, 'autoBuy' in body && body.autoBuy === true));
+    res.json(await service.attempt(body.id, body.targetId, body.maxPrice, 'autoBuy' in body && body.autoBuy === true, ('minBidResetAt' in body ? body.minBidResetAt : undefined) as number | undefined));
   });
   app.post('/api/attempts/:id/resolve', async (req, res) => {
     await service.resolve(String(req.params.id), req.body?.resolution, req.body?.checked);
@@ -33,7 +41,7 @@ export function createApp(service: Companion, port: number, mock?: MockReader) {
   });
   // Only test bootstrapping registers this route. Production has no mock switch.
   if (mock) app.post('/api/test/scenario', (req, res) => {
-    const scenarios: Scenario[] = ['eligible','price_high','no_player','wrong_version','price_changed','listing_gone','session_expired','disconnected','unknown'];
+    const scenarios: Scenario[] = ['purchased','purchase_failed','eligible','price_high','no_player','wrong_version','price_changed','listing_gone','session_expired','disconnected','unknown'];
     if (!scenarios.includes(req.body?.scenario)) throw new AppError('invalid', 'Geçersiz test senaryosu.');
     mock.scenario = req.body.scenario as Scenario; res.json({ ok: true });
   });
